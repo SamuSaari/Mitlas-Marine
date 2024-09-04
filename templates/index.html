@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mitlas Luotausvisualisointityökalu</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="App Logo">
+        <h1>Mitlas Luotausvisualisointityökalu</h1>
+    </header>
+
+    <div class="container">
+        <h1>Lataa Luotausdatatiedosto</h1>
+        <form method="post" enctype="multipart/form-data">
+            <input type="file" name="file" required>
+            <input type="submit" value="Lataa ja Visualisoi">
+        </form>
+        {% if filename %}
+        <h2>Korkeuskäyrä</h2>
+        <img src="{{ url_for('static', filename='output/' ~ filename) }}" alt="Output Image">
+        <p><a href="{{ url_for('static', filename='output/' ~ filename) }}" download>Lataa kuva laitteellesi</a></p>
+        {% endif %}
+    </div>
+</body>
+</html>

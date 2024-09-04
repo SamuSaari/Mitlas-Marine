@@ -1,0 +1,8 @@
+Flask
+numpy
+pandas
+matplotlib
+scipy
+geopandas
+contextily
+pyproj
