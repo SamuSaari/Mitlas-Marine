@@ -1,27 +1,9 @@
 version: '3.8'
 
 services:
-  flask:
+  flask-app:
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: Mitlas-Luotaus
+      context: .  # Build the Docker image from the current directory
+    container_name: flask_app_container
     ports:
-      - "5000:5000"
-    networks:
-      - app-network
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    command: tunnel --config /etc/cloudflared/config.yml run
-    volumes:
-      - ./cloudflared:/etc/cloudflared
-    depends_on:
-      - flask
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
+      - "5000:5000"  # Map port 5000 on the host to port 5000 in the container

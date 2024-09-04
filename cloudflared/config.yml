@@ -1,7 +1,0 @@
-tunnel: mitlas-luotaus
-credentials-file: /etc/cloudflared/mitlas-luotaus.json
-
-ingress:
-  - hostname: luotaus.mittauslaskenta.com
-    service: http://flask:5000
-  - service: http_status:404
