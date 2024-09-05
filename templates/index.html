@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fi">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -19,11 +19,11 @@
             <input type="file" name="file" required>
             <div>
                 <h3>Valitse yksi tai useampi visualisointivaihtoehto:</h3>
-                <input type="checkbox" id="contours" name="contours" value="contours">
+                <input type="checkbox" id="contours" name="contours" value="contours" {% if request.form.get('contours') %}checked{% endif %}>
                 <label for="contours">Syvyyskäyrät</label><br>
-                <input type="checkbox" id="depthmap" name="depthmap" value="depthmap">
+                <input type="checkbox" id="depthmap" name="depthmap" value="depthmap" {% if request.form.get('depthmap') %}checked{% endif %}>
                 <label for="depthmap">Syvyyskartta</label><br>
-                <input type="checkbox" id="satellite" name="satellite" value="satellite">
+                <input type="checkbox" id="satellite" name="satellite" value="satellite" {% if request.form.get('satellite') %}checked{% endif %}>
                 <label for="satellite">Satelliittikuvapohja</label><br>
             </div>
             <input type="submit" value="Lähetä ja Prosessoi">

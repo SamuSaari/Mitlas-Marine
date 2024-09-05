@@ -8,13 +8,11 @@ from scipy.interpolate import griddata
 import geopandas as gpd
 import contextily as ctx
 import os
-import tempfile
-from pyproj import CRS
 from threading import Timer
-import time
+from shapely.affinity import translate
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = tempfile.mkdtemp()  # Use a temporary directory
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'output')  # Use a static directory for serving files
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limit upload size to 16MB
 ALLOWED_EXTENSIONS = {'txt'}  # Only allow .txt files
 
@@ -22,17 +20,28 @@ def allowed_file(filename):
     """Check if the uploaded file is allowed."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def detect_crs(x_values):
-    """Detect the coordinate reference system based on X values."""
-    if x_values.mean() > 2500000 and x_values.mean() < 2600000:
-        return "EPSG:31469"  # GK25 (Zone 3)
-    elif x_values.mean() > 2600000 and x_values.mean() < 2700000:
-        return "EPSG:31470"  # GK26 (Zone 4)
-    else:
-        return "EPSG:4326"  # Default to WGS 84 if unrecognized
+def detect_crs(data):
+    """Detect whether the data is in latitude/longitude or a projected CRS like ETRS-GK."""
+    x_min, x_max = data['X'].min(), data['X'].max()
+    y_min, y_max = data['Y'].min(), data['Y'].max()
+    
+    # Check if the data is in latitude/longitude (EPSG:4326)
+    if -180 <= x_min <= 180 and -180 <= x_max <= 180 and -90 <= y_min <= 90 and -90 <= y_max <= 90:
+        print("Detected coordinate system: EPSG:4326 (WGS 84)")
+        return "EPSG:4326"
+    
+    # Check if the data is in a Finland-specific ETRS-GK system
+    if 3000000 <= x_min <= 7000000 and 5000000 <= y_min <= 8000000:
+        print("Detected coordinate system: Finland ETRS-GK system (e.g., EPSG:3876 for GK26)")
+        return "EPSG:3876"  # Default to GK26; adjust based on specific zone if needed
+    
+    # If data doesn't fit the criteria above, return None or a default
+    print("Unable to detect the coordinate system. Defaulting to EPSG:4326.")
+    return "EPSG:4326"  # Default to WGS 84
 
-def plot_bathymetry(file_path, output_path, contours=False, depthmap=False, satellite=False, method='linear', grid_resolution=100, buffer=0.05):
+def plot_bathymetry(file_path, output_path, contours=False, depthmap=False, satellite=False, method='linear', grid_resolution=100, buffer=0.1):
     try:
+        # Read the ASCII text file, skip the point number column
         data = pd.read_csv(file_path, sep=',', header=None, usecols=[1, 2, 3], names=['X', 'Y', 'Z'])
         data['X'] = pd.to_numeric(data['X'], errors='coerce')
         data['Y'] = pd.to_numeric(data['Y'], errors='coerce')
@@ -42,36 +51,52 @@ def plot_bathymetry(file_path, output_path, contours=False, depthmap=False, sate
         if data.empty:
             raise ValueError("Invalid data: The uploaded file does not contain valid numeric data.")
 
-        detected_crs = detect_crs(data['X'].values)
+        # Detect the CRS of the input data
+        detected_crs = detect_crs(data)
         gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data.X, data.Y), crs=detected_crs)
-        gdf = gdf.to_crs(epsg=4326)
 
+        # Convert coordinates to EPSG:4326 (latitude and longitude) if not already in it
+        if detected_crs != "EPSG:4326":
+            gdf = gdf.to_crs(epsg=4326)
+
+        # Remove NaN or duplicate points after transformation
+        gdf = gdf.dropna(subset=['geometry'])
+        gdf = gdf.drop_duplicates(subset=['geometry'])
+
+        # Apply small noise to avoid exact duplicates using shapely.affinity.translate
+        gdf.geometry = gdf.geometry.apply(lambda geom: translate(
+            geom, xoff=np.random.uniform(-1e-6, 1e-6), yoff=np.random.uniform(-1e-6, 1e-6)
+        ))
+
+        # Extract x, y, z coordinates
         x = gdf.geometry.x.values
         y = gdf.geometry.y.values
         z = data['Z'].values
 
+        # Determine grid extents with buffer for zooming out
         x_min, x_max = x.min(), x.max()
         y_min, y_max = y.min(), y.max()
-
         x_range = x_max - x_min
         y_range = y_max - y_min
-
         x_min -= x_range * buffer
         x_max += x_range * buffer
         y_min -= y_range * buffer
         y_max += y_range * buffer
 
+        # Create grid for interpolation
         xi = np.linspace(x_min, x_max, grid_resolution)
         yi = np.linspace(y_min, y_max, grid_resolution)
         xi, yi = np.meshgrid(xi, yi)
         zi = griddata((x, y), z, (xi, yi), method=method)
 
+        # Convert to Web Mercator for basemap
         gdf_wm = gdf.to_crs(epsg=3857)
         xi_wm, yi_wm = np.meshgrid(
             np.linspace(gdf_wm.geometry.x.min(), gdf_wm.geometry.x.max(), grid_resolution),
             np.linspace(gdf_wm.geometry.y.min(), gdf_wm.geometry.y.max(), grid_resolution)
         )
 
+        # Plotting
         fig, ax = plt.subplots(figsize=(12, 10))
 
         if satellite:
@@ -93,6 +118,7 @@ def plot_bathymetry(file_path, output_path, contours=False, depthmap=False, sate
         ax.set_xlabel('Longitude')
         ax.set_ylabel('Latitude')
 
+        # Save the figure to the output path
         plt.savefig(output_path)
         plt.close()
 
@@ -122,7 +148,7 @@ def index():
         if file.filename == '':
             return 'No selected file'
         if file and allowed_file(file.filename):
-            # Save the uploaded file in the temporary directory
+            # Save the uploaded file in the specified static folder
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
             file.save(file_path)
 

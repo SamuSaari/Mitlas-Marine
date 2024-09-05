@@ -1,9 +1,11 @@
-version: '3.8'
-
 services:
   flask-app:
     build:
-      context: .  # Build the Docker image from the current directory
-    container_name: flask_app_container
+      context: .  # Use the current directory as the build context
+    container_name: mitlas-marine-flask_app_container
     ports:
       - "5000:5000"  # Map port 5000 on the host to port 5000 in the container
+    environment:
+      FLASK_ENV: production  # Set environment to production
+    volumes:
+      - .:/app  # Mount the current directory to /app inside the container (useful for development)
